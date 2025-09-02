@@ -7,16 +7,12 @@ export const fetchAnswerStream = async (
   onData: (data: SseDataChunk) => void,
   onError: (error: Error) => void,
   onComplete: () => void,
-  signal: AbortSignal,
-  onLog: (message: string) => void
+  signal: AbortSignal
 ) => {
   const requestBody = {
     type: 'TEXT',
     question: question,
   };
-
-  onLog(`[REQUEST] POST ${API_URL}`);
-  onLog(`Payload: ${JSON.stringify(requestBody, null, 2)}`);
 
   try {
     const response = await fetch(API_URL, {
@@ -29,8 +25,6 @@ export const fetchAnswerStream = async (
       signal,
     });
     
-    onLog(`[RESPONSE] Status: ${response.status} ${response.statusText}`);
-
     if (!response.ok) {
       const apiError = new Error(`API error: ${response.status} ${response.statusText}`);
       onError(apiError);
@@ -60,13 +54,11 @@ export const fetchAnswerStream = async (
           if (line.startsWith('data:')) {
             const jsonString = line.substring(5).trim();
             if (jsonString) {
-                onLog(`[STREAM DATA] ${jsonString.substring(0, 200)}${jsonString.length > 200 ? '...' : ''}`);
                 try {
                     const parsedData: SseDataChunk = JSON.parse(jsonString);
                     onData(parsedData);
                 } catch (e) {
                     console.error('Failed to parse SSE data chunk:', jsonString, e);
-                    onLog(`[STREAM PARSE ERROR] ${e instanceof Error ? e.message : String(e)}`);
                 }
             }
           }
@@ -85,12 +77,10 @@ export const fetchAnswerStream = async (
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       console.log('Fetch aborted by user.');
-      onLog('[REQUEST ABORTED]');
       return;
     }
     
     console.error('Error fetching answer stream:', error);
-    onLog(`[ERROR] ${error instanceof Error ? error.message : String(error)}`);
     onError(error as Error);
   }
 };
