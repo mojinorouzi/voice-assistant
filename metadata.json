@@ -1,0 +1,7 @@
+{
+  "name": "AI Voice Conversation",
+  "description": "An application that allows users to ask questions by voice, converts the voice to text, sends it to an intelligent response API, and streams the answer back as audio in real-time, simulating a phone conversation.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
