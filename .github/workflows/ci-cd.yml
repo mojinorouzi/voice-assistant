@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
@@ -21,21 +24,71 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run build
-        run: npm run build
+      - name: Debug - List files before build
+        run: ls -la
 
-      - name: Verify build directory
-        run: ls -la build  # Debug: List build contents
+      - name: Run build with detailed output
+        run: |
+          echo "Running build command..."
+          npm run build
+          echo "Build exit code: $?"
+          
+      - name: Debug - List files after build
+        run: |
+          echo "Current directory structure:"
+          pwd
+          ls -la
+          echo ""
+          echo "Checking common build directories:"
+          [ -d "build" ] && echo "✓ build directory exists" && ls -la build/ || echo "✗ build directory not found"
+          [ -d "dist" ] && echo "✓ dist directory exists" && ls -la dist/ || echo "✗ dist directory not found"
+          [ -d "public" ] && echo "✓ public directory exists" && ls -la public/ || echo "✗ public directory not found"
+          [ -d "out" ] && echo "✓ out directory exists" && ls -la out/ || echo "✗ out directory not found"
+
+      - name: Determine build directory
+        id: set-build-dir
+        run: |
+          if [ -d "build" ]; then
+            echo "BUILD_DIR=build" >> $GITHUB_OUTPUT
+          elif [ -d "dist" ]; then
+            echo "BUILD_DIR=dist" >> $GITHUB_OUTPUT
+          elif [ -d "out" ]; then
+            echo "BUILD_DIR=out" >> $GITHUB_OUTPUT
+          else
+            echo "ERROR: No build directory found!"
+            ls -la
+            exit 1
+          fi
+          echo "Using build directory: ${{ steps.set-build-dir.outputs.BUILD_DIR }}"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: react-build
-          path: build/
-          if-no-files-found: error  # Fail if build files are missing
+          path: ${{ steps.set-build-dir.outputs.BUILD_DIR }}/
+          if-no-files-found: error
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test -- --watchAll=false --passWithNoTests
 
   deploy:
-    needs: build
+    needs: [build, test]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -43,7 +96,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: react-build
-          path: build/  # Ensure this matches the upload path
+          path: build/
+
+      - name: Verify downloaded artifact
+        run: |
+          echo "Downloaded artifact contents:"
+          ls -la build/
+          [ -f "build/index.html" ] || [ -f "build/200.html" ] || [ -f "build/index.htm" ] && echo "✓ HTML file found" || echo "✗ No HTML file found"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
